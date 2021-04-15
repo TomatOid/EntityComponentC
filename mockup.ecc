@@ -1,0 +1,20 @@
+// #includes get copied to the top of the generated c file if they are not in a c scope
+#include "somefile.h"
+
+// components are just c structs
+
+// stencils are a sort of category used when creating entities, 
+stencil NPC
+{
+    Transform,
+    ?Physics,
+    Model,
+}
+
+system PhysicsSystem acts (Transform t, Physics p) uses (double delta, double gravity)
+{
+    p.vy += gravity * delta;
+    t.x += p.vx * delta;
+    t.y += p.vy * delta;
+    t.z += p.vz * delta;
+}
