@@ -61,7 +61,7 @@ int removeFromTable(HashTable *table, uint64_t key, uint64_t *value)
         HashItem *after = curr->next;
         *value = curr->value;
         if (prev) prev->next = after;
-        if (!blockFree(&table->page, curr)) return 0;
+        if (!blockFree(&table->page, curr)) return 0; // TODO: use a different value for errors?
         if (!prev) table->items[hash] = after;
         table->num--;
         return 1;

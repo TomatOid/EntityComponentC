@@ -234,7 +234,7 @@ uint64_t *getEulerPath(uint64_t *edges, size_t count)
     if (!stack)
         goto error1;
     size_t solution_top = 0;
-    solution = malloc(sizeof(uint64_t) * count);
+    solution = malloc(sizeof(uint64_t) * (count + 1) / 2);
     if (!solution)
         goto error2;
     
@@ -268,13 +268,39 @@ error0:
     return solution;
 }
 
+ssize_t removeDuplicates(uint64_t *array, size_t count)
+{
+    ssize_t new_len = -1;
+    BlockPage page;
+    if (!makePage(&page, count, sizeof(HashItem)))
+        goto error0;
+    HashTable table = { .items = calloc(count, sizeof(HashItem *)),
+        .page = page, .len = count };
+    if (!table.items)
+        goto error1;
+
+    uint64_t dummy;
+    for (size_t i = new_len = 0; i < count; i++) {
+        if (!findInTable(&table, array[i], &dummy)) {
+            array[new_len++] = array[i];
+            insertToTable(&table, array[i], 0); 
+        }
+    }
+    
+error1:
+    free(page.pool);
+    free(page.free);
+error0:
+    return new_len;
+}
+
 #define array_size(arr) (sizeof(arr) / sizeof(*arr))
 
 int main()
 {
     //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    uint64_t array[10];
+    uint64_t array[20];
     for (uint64_t i = 0; i < array_size(array); i += (rand() % 2))
         array[i] = i;
 
@@ -309,7 +335,8 @@ int main()
     }
     
     uint64_t *euler = getEulerPath(euler_in, total_len);
-    for (int i = 0; i < total_len / 2; i++) {
+    total_len = removeDuplicates(euler, total_len / 2);
+    for (int i = 0; i < total_len; i++) {
         printf("%lu, ", euler[i]);
     }
 
