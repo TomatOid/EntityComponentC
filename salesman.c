@@ -146,19 +146,19 @@ struct GraphEdge *getMinSpanningForest(unsigned int *numbers, size_t count, stru
 // as an additive algorithm
 int getMinMatching(unsigned int *odd_nodes, size_t count)
 {
-    ssize_t min_oppertunity_cost = SSIZE_MAX;
-    size_t min_i, min_j;
     if (!count || count & 1) 
         return 0;
 
-    else {
-        unsigned int distance_sums[count];
+    unsigned int distance_sums[count];
 
-        // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
-        for (size_t i = 0; i < count; i++)
-            for (size_t j = distance_sums[i] = 0; j < count; j++)
-                distance_sums[i] += hammingDist(odd_nodes[i], odd_nodes[j]);
+    // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
+    for (size_t i = 0; i < count; i++)
+        for (size_t j = distance_sums[i] = 0; j < count; j++)
+            distance_sums[i] += hammingDist(odd_nodes[i], odd_nodes[j]);
 
+    for (; count >= 2; count -= 2) {
+        ssize_t min_oppertunity_cost = SSIZE_MAX;
+        size_t min_i, min_j = 0;
         // loop over all edges
         for (size_t i = 0; i < count - 1; i++) {
             for (size_t j = i + 1; j < count; j++) {
@@ -172,9 +172,11 @@ int getMinMatching(unsigned int *odd_nodes, size_t count)
                 }
             }
         }
-    }
-
-    if (count >= 2) {
+        // update distance_sums to account for the removal
+        for (size_t i = 0; i < count; i++)
+            distance_sums[i] -= hammingDist(odd_nodes[i], odd_nodes[min_i]) + hammingDist(odd_nodes[i], odd_nodes[min_j]);
+        distance_sums[min_j] = distance_sums[count - 1];
+        distance_sums[min_i] = distance_sums[count - 2];
         // swap the min i and j to the end
         unsigned int t = odd_nodes[min_j];
         odd_nodes[min_j] = odd_nodes[count - 1];
@@ -182,10 +184,8 @@ int getMinMatching(unsigned int *odd_nodes, size_t count)
         t = odd_nodes[min_i];
         odd_nodes[min_i] = odd_nodes[count - 2];
         odd_nodes[count - 2] = t;
-        // now recurse with count - 2
-        return getMinMatching(odd_nodes, count - 2);
     }
-    else return 1;
+    return 1;
 }
 
 unsigned int *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree_count)
