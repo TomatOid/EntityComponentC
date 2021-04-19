@@ -132,14 +132,11 @@ int getMinMatching(unsigned int *odd_nodes, size_t count)
 {
     if (!count || count & 1) 
         return 0;
-    // could use vla here
-    unsigned int *distance_sums = calloc(count, sizeof(unsigned int));
-    if (!distance_sums)
-        return 0;
+    unsigned int distance_sums[count];
 
     // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
     for (size_t i = 0; i < count; i++)
-        for (size_t j = 0; j < count; j++)
+        for (size_t j = distance_sums[i] = 0; j < count; j++)
             distance_sums[i] += hammingDist(odd_nodes[i], odd_nodes[j]);
 
     ssize_t min_oppertunity_cost = SSIZE_MAX;
@@ -158,7 +155,6 @@ int getMinMatching(unsigned int *odd_nodes, size_t count)
         }
     }
 
-    free(distance_sums);
     if (count >= 2) {
         // swap the min i and j to the end
         unsigned int t = odd_nodes[min_j];
