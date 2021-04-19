@@ -128,26 +128,28 @@ struct GraphEdge *getMinSpanningForest(unsigned int *numbers, size_t count, stru
     return result;
 } 
 
-void getMinMatching(unsigned int *odd_nodes, size_t count)
+int getMinMatching(unsigned int *odd_nodes, size_t count)
 {
-    if (!count) 
-        return;
+    if (!count || count & 1) 
+        return 0;
+    // could use vla here
+    unsigned int *distance_sums = calloc(count, sizeof(unsigned int));
+    if (!distance_sums)
+        return 0;
+
+    // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
+    for (size_t i = 0; i < count; i++)
+        for (size_t j = 0; j < count; j++)
+            distance_sums[i] += hammingDist(odd_nodes[i], odd_nodes[j]);
+
     ssize_t min_oppertunity_cost = SSIZE_MAX;
     size_t min_i, min_j;
     // loop over all edges
     for (size_t i = 0; i < count - 1; i++) {
         for (size_t j = i + 1; j < count; j++) {
             // calculate the oppertunity cost of connecting these two nodes
-            ssize_t cost = hammingDist(odd_nodes[i], odd_nodes[j]);
-            for (size_t k = 0; k < i; k++)
-                cost -= hammingDist(odd_nodes[i], odd_nodes[k])
-                    + hammingDist(odd_nodes[j], odd_nodes[k]);
-            for (size_t k = i + 1; k < j; k++)
-                cost -= hammingDist(odd_nodes[i], odd_nodes[k])
-                    + hammingDist(odd_nodes[j], odd_nodes[k]);
-            for (size_t k = j + 1; k < count; k++)
-                cost -= hammingDist(odd_nodes[i], odd_nodes[k])
-                    + hammingDist(odd_nodes[j], odd_nodes[k]);
+            ssize_t cost = 2 * hammingDist(odd_nodes[i], odd_nodes[j]) - distance_sums[i] - distance_sums[j];
+            
             if (cost < min_oppertunity_cost) {
                 min_oppertunity_cost = cost;
                 min_i = i;
@@ -156,7 +158,8 @@ void getMinMatching(unsigned int *odd_nodes, size_t count)
         }
     }
 
-    if (min_oppertunity_cost != SSIZE_MAX) {
+    free(distance_sums);
+    if (count >= 2) {
         // swap the min i and j to the end
         unsigned int t = odd_nodes[min_j];
         odd_nodes[min_j] = odd_nodes[count - 1];
@@ -165,8 +168,9 @@ void getMinMatching(unsigned int *odd_nodes, size_t count)
         odd_nodes[min_i] = odd_nodes[count - 2];
         odd_nodes[count - 2] = t;
         // now recurse with count - 2
-        getMinMatching(odd_nodes, count - 2);
+        return getMinMatching(odd_nodes, count - 2);
     }
+    else return 1;
 }
 
 unsigned int *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree_count)
@@ -190,21 +194,23 @@ unsigned int *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree
     return result;
 }
 
+#define array_size(arr) (sizeof(arr) / sizeof(*arr))
+
 int main()
 {
     //unsigned int array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //unsigned int array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    unsigned int array[256];
-    for (int i = 0; i < 256; i++)
+    unsigned int array[512];
+    for (int i = 0; i < 512; i++)
         array[i] = i;
 
     struct SetNode *set = NULL;
-    struct GraphEdge *min_tree = getMinSpanningForest(array, sizeof(array) / sizeof(*array), &set);
+    struct GraphEdge *min_tree = getMinSpanningForest(array, array_size(array), &set);
     
-    for (int i = 0; i < sizeof(array) / sizeof(*array) - 1; i++)
+    for (int i = 0; i < array_size(array) - 1; i++)
         printf("<%d, %d>\n", min_tree[i].verticies[0]->value, min_tree[i].verticies[1]->value);
 
-    for (int i = 0; i < sizeof(array) / sizeof(*array); i++)
+    for (int i = 0; i < array_size(array); i++)
         printf("value: %d, degree: %d\n", set[i].value, set[i].degree);
 
     size_t odd_count = 0;
@@ -212,6 +218,6 @@ int main()
     
     getMinMatching(odds, odd_count);
 
-    for (int i = 0; i < odd_count; i += 2)
+    for (int i = 0; i + 1 < odd_count; i += 2)
         printf("[%d, %d]\n", odds[i], odds[i + 1]);
 }
