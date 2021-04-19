@@ -40,11 +40,11 @@ struct SetNode *find(struct SetNode *x)
 }
 
 // returns 1 if any work was done
-int unionFind(struct SetNode *x, struct SetNode *y)
+int unionFind(struct SetNode *x_base, struct SetNode *y_base)
 {
     // make sure we are root of each set
-    x = find(x);
-    y = find(y);
+    struct SetNode *x = find(x_base);
+    struct SetNode *y = find(y_base);
 
     // if they are equal, we know that the two sets
     // are already connected, so we can stop here
@@ -61,6 +61,8 @@ int unionFind(struct SetNode *x, struct SetNode *y)
     // make x and y union 
     y->parent = x;
     x->rank += (x->rank == y->rank);
+    x_base->degree++;
+    y_base->degree++;
     return 1;
 }
 
@@ -119,8 +121,6 @@ struct GraphEdge *getMinSpanningForest(unsigned int *numbers, size_t count, stru
     for (size_t i = 0; i < edges_count; i++) { 
         if (unionFind(edges[i].verticies[0], edges[i].verticies[1])) {
             result[return_count++] = edges[i];
-            edges[i].verticies[0]->degree++;
-            edges[i].verticies[1]->degree++;
         }
     }
 
@@ -128,29 +128,48 @@ struct GraphEdge *getMinSpanningForest(unsigned int *numbers, size_t count, stru
     return result;
 } 
 
+// Some reasoning behind this algorithm:
+//
+// It seems like most perfect matching algorithms think about the graph
+// additively, meaning that they start with an empty graph and add connections
+// in such a way that will: 
+//  (a) increase the total weight as little as possible
+//  (b) make the degree of each vertex 1
+//
+// It would be easier to think of this algorithm as subtractive, meaning that
+// you start with a complete graph and eliminate edges in such a way that:
+//  (a) isolates a set of verticies from the rest of the graph (making them
+//  degree 1)
+//  (b) decreases the total weight of the graph as much as possible
+//
+// This step can be applied recursively to the larger subgraph to produce the same result
+// as an additive algorithm
 int getMinMatching(unsigned int *odd_nodes, size_t count)
 {
-    if (!count || count & 1) 
-        return 0;
-    unsigned int distance_sums[count];
-
-    // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
-    for (size_t i = 0; i < count; i++)
-        for (size_t j = distance_sums[i] = 0; j < count; j++)
-            distance_sums[i] += hammingDist(odd_nodes[i], odd_nodes[j]);
-
     ssize_t min_oppertunity_cost = SSIZE_MAX;
     size_t min_i, min_j;
-    // loop over all edges
-    for (size_t i = 0; i < count - 1; i++) {
-        for (size_t j = i + 1; j < count; j++) {
-            // calculate the oppertunity cost of connecting these two nodes
-            ssize_t cost = 2 * hammingDist(odd_nodes[i], odd_nodes[j]) - distance_sums[i] - distance_sums[j];
-            
-            if (cost < min_oppertunity_cost) {
-                min_oppertunity_cost = cost;
-                min_i = i;
-                min_j = j;
+    if (!count || count & 1) 
+        return 0;
+
+    else {
+        unsigned int distance_sums[count];
+
+        // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
+        for (size_t i = 0; i < count; i++)
+            for (size_t j = distance_sums[i] = 0; j < count; j++)
+                distance_sums[i] += hammingDist(odd_nodes[i], odd_nodes[j]);
+
+        // loop over all edges
+        for (size_t i = 0; i < count - 1; i++) {
+            for (size_t j = i + 1; j < count; j++) {
+                // calculate the oppertunity cost of connecting these two nodes
+                ssize_t cost = 2 * hammingDist(odd_nodes[i], odd_nodes[j]) - distance_sums[i] - distance_sums[j];
+                
+                if (cost < min_oppertunity_cost) {
+                    min_oppertunity_cost = cost;
+                    min_i = i;
+                    min_j = j;
+                }
             }
         }
     }
@@ -202,7 +221,7 @@ int main()
 
     struct SetNode *set = NULL;
     struct GraphEdge *min_tree = getMinSpanningForest(array, array_size(array), &set);
-    
+
     for (int i = 0; i < array_size(array) - 1; i++)
         printf("<%d, %d>\n", min_tree[i].verticies[0]->value, min_tree[i].verticies[1]->value);
 
