@@ -224,13 +224,13 @@ uint64_t *getEulerPath(uint64_t *edges, size_t count)
         goto error0;
 
     for (size_t i = 0; i < count; i += 2) {
-        insertToTable(&adj_table, edges[i], edges + i + 1);
-        insertToTable(&adj_table, edges[i + 1], edges + i);
+        insertToTable(&adj_table, edges[i], edges[i + 1]);
+        insertToTable(&adj_table, edges[i + 1], edges[i]);
     }
 
     // allocate space for the stacks
     ssize_t stack_top = 0;
-    uint64_t **stack = malloc(sizeof(uint64_t *) * count);
+    uint64_t *stack = malloc(sizeof(uint64_t) * count);
     if (!stack)
         goto error1;
     size_t solution_top = 0;
@@ -238,16 +238,16 @@ uint64_t *getEulerPath(uint64_t *edges, size_t count)
     if (!solution)
         goto error2;
     
-    uint64_t *current_node = edges;
+    uint64_t current_node = *edges;
     do {
-        uint64_t *next_node = removeFromTable(&adj_table, *current_node);
-        if (next_node) {
-            removeFromTableByValue(&adj_table, *next_node, current_node);
+        uint64_t next_node;
+        if (removeFromTable(&adj_table, current_node, &next_node)) {
+            assert(removeFromTableByValue(&adj_table, next_node, current_node));
             stack[stack_top++] = current_node;
             current_node = next_node;
         }
         else { 
-            solution[solution_top++] = *current_node;
+            solution[solution_top++] = current_node;
             current_node = stack[--stack_top];
         }
     } while (stack_top > 0);
@@ -274,8 +274,8 @@ int main()
 {
     //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    uint64_t array[8];
-    for (uint64_t i = 0; i < array_size(array); i += 1)
+    uint64_t array[10];
+    for (uint64_t i = 0; i < array_size(array); i += (rand() % 2))
         array[i] = i;
 
     struct SetNode *set = NULL;
@@ -309,7 +309,7 @@ int main()
     }
     
     uint64_t *euler = getEulerPath(euler_in, total_len);
-    for (int i = 0; i < total_len - 1; i++) {
+    for (int i = 0; i < total_len / 2; i++) {
         printf("%lu, ", euler[i]);
     }
 
