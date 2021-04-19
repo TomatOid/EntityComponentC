@@ -3,11 +3,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <limits.h>
+#include "HashTable.h"
 
-unsigned int hammingDist(unsigned int p, unsigned int q)
+uint64_t hammingDist(uint64_t p, uint64_t q)
 {
 #ifdef __GNUC__
-    return __builtin_popcount(p ^ q);
+    return __builtin_popcountl(p ^ q);
 #else
     p ^= q;
     for (q = 0; p; p >>= 1)
@@ -17,8 +18,8 @@ unsigned int hammingDist(unsigned int p, unsigned int q)
 }
 
 struct SetNode {
-    unsigned int value;
-    unsigned int rank;
+    uint64_t value;
+    size_t rank;
     unsigned char degree;
     struct SetNode *parent;
 };
@@ -76,7 +77,7 @@ int edgeCompareFn(const void *a, const void *b)
     return ((struct GraphEdge *)a)->ham_dist - ((struct GraphEdge *)b)->ham_dist;
 }
 
-struct GraphEdge *getMinSpanningForest(unsigned int *numbers, size_t count, struct SetNode **disjoint_set)
+struct GraphEdge *getMinSpanningForest(uint64_t *numbers, size_t count, struct SetNode **disjoint_set)
 {
     // we want to solve this for the complete graph, so we will have
     // count choose 2 edges, so we allocate an array of size count * (count - 1) / 2
@@ -144,12 +145,12 @@ struct GraphEdge *getMinSpanningForest(unsigned int *numbers, size_t count, stru
 //
 // This step can be applied recursively to the larger subgraph to produce the same result
 // as an additive algorithm
-int getMinMatching(unsigned int *odd_nodes, size_t count)
+int getMinMatching(uint64_t *odd_nodes, size_t count)
 {
     if (!count || count & 1) 
         return 0;
 
-    unsigned int distance_sums[count];
+    uint64_t distance_sums[count];
 
     // now precompute the distances, this reduces the time complexity from O(n^4) to O(n^3)
     for (size_t i = 0; i < count; i++)
@@ -178,7 +179,7 @@ int getMinMatching(unsigned int *odd_nodes, size_t count)
         distance_sums[min_j] = distance_sums[count - 1];
         distance_sums[min_i] = distance_sums[count - 2];
         // swap the min i and j to the end
-        unsigned int t = odd_nodes[min_j];
+        uint64_t t = odd_nodes[min_j];
         odd_nodes[min_j] = odd_nodes[count - 1];
         odd_nodes[count - 1] = t;
         t = odd_nodes[min_i];
@@ -188,7 +189,7 @@ int getMinMatching(unsigned int *odd_nodes, size_t count)
     return 1;
 }
 
-unsigned int *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree_count)
+uint64_t *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree_count)
 {
     // first count the number of odd degree elements
     size_t odd_count = 0;
@@ -197,7 +198,7 @@ unsigned int *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree
 
     *odd_degree_count = odd_count;
 
-    unsigned int *result = malloc(sizeof(unsigned int) * odd_count);
+    uint64_t *result = malloc(sizeof(uint64_t) * odd_count);
     if (!result)
         return NULL;
     
@@ -209,30 +210,107 @@ unsigned int *getOddDegree(struct SetNode *set, size_t count, size_t *odd_degree
     return result;
 }
 
+uint64_t *getEulerPath(uint64_t *edges, size_t count)
+{
+    uint64_t *solution = NULL;
+    // first set up an ajacency hash table
+    BlockPage page;
+    if (!makePage(&page, count, sizeof(HashItem)))
+        return NULL;
+    HashTable adj_table = (HashTable) { .items = calloc(count, sizeof(HashItem *)),
+        .page = page, .len = count };
+
+    if (!adj_table.items)
+        goto error0;
+
+    for (size_t i = 0; i < count; i += 2) {
+        insertToTable(&adj_table, edges[i], edges + i + 1);
+        insertToTable(&adj_table, edges[i + 1], edges + i);
+    }
+
+    // allocate space for the stacks
+    ssize_t stack_top = 0;
+    uint64_t **stack = malloc(sizeof(uint64_t *) * count);
+    if (!stack)
+        goto error1;
+    size_t solution_top = 0;
+    solution = malloc(sizeof(uint64_t) * count);
+    if (!solution)
+        goto error2;
+    
+    uint64_t *current_node = edges;
+    do {
+        uint64_t *next_node = removeFromTable(&adj_table, *current_node);
+        if (next_node) {
+            removeFromTableByValue(&adj_table, *next_node, current_node);
+            stack[stack_top++] = current_node;
+            current_node = next_node;
+        }
+        else { 
+            solution[solution_top++] = *current_node;
+            current_node = stack[--stack_top];
+        }
+    } while (stack_top > 0);
+
+    printf("solution_top = %lu, count = %lu\n", solution_top, count);
+
+    // think i know why people like defer now
+    // TODO: maybe do one giant alloc instead of a bunch of little ones,
+    // although this will probably increase the chance of failure in a
+    // fragmented heap
+error2:
+    free(stack);
+error1:
+    free(adj_table.items);
+error0:
+    free(page.pool);
+    free(page.free);
+    return solution;
+}
+
 #define array_size(arr) (sizeof(arr) / sizeof(*arr))
 
 int main()
 {
-    //unsigned int array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
-    //unsigned int array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    unsigned int array[512];
-    for (int i = 0; i < 512; i++)
+    //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
+    //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    uint64_t array[8];
+    for (uint64_t i = 0; i < array_size(array); i += 1)
         array[i] = i;
 
     struct SetNode *set = NULL;
     struct GraphEdge *min_tree = getMinSpanningForest(array, array_size(array), &set);
 
     for (int i = 0; i < array_size(array) - 1; i++)
-        printf("<%d, %d>\n", min_tree[i].verticies[0]->value, min_tree[i].verticies[1]->value);
+        printf("<%lu, %lu>\n", min_tree[i].verticies[0]->value, min_tree[i].verticies[1]->value);
 
-    for (int i = 0; i < array_size(array); i++)
-        printf("value: %d, degree: %d\n", set[i].value, set[i].degree);
+    //for (int i = 0; i < array_size(array); i++)
+    //    printf("value: %lu, degree: %d\n", set[i].value, set[i].degree);
 
     size_t odd_count = 0;
-    unsigned int *odds = getOddDegree(set, sizeof(array) / sizeof(*array), &odd_count);
+    uint64_t *odds = getOddDegree(set, sizeof(array) / sizeof(*array), &odd_count);
     
     getMinMatching(odds, odd_count);
 
     for (int i = 0; i + 1 < odd_count; i += 2)
-        printf("[%d, %d]\n", odds[i], odds[i + 1]);
+        printf("[%lu, %lu]\n", odds[i], odds[i + 1]);
+
+    // append the two arrays together
+    // TODO: correct spaget
+    size_t total_len = 2 * (array_size(array) - 1) + odd_count;
+    uint64_t *euler_in = malloc(sizeof(uint64_t) * total_len);
+    int index = 0;
+    for (; index / 2 < array_size(array) - 1; index += 2) {
+        euler_in[index] = min_tree[index / 2].verticies[0]->value;
+        euler_in[index + 1] = min_tree[index / 2].verticies[1]->value;
+    }
+    for (int i = 0; index < total_len; i++, index++) {
+        euler_in[index] = odds[i];
+    }
+    
+    uint64_t *euler = getEulerPath(euler_in, total_len);
+    for (int i = 0; i < total_len - 1; i++) {
+        printf("%lu, ", euler[i]);
+    }
+
 }
