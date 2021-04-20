@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <limits.h>
+#include <omp.h>
 #include "HashTable.h"
 
 uint64_t hammingDist(uint64_t p, uint64_t q)
@@ -161,18 +162,31 @@ int getMinMatching(uint64_t *odd_nodes, size_t count)
         ssize_t min_oppertunity_cost = SSIZE_MAX;
         size_t min_i, min_j = 0;
         // loop over all edges
-        for (size_t i = 0; i < count - 1; i++) {
-            for (size_t j = i + 1; j < count; j++) {
-                // calculate the oppertunity cost of connecting these two nodes
-                ssize_t cost = 2 * hammingDist(odd_nodes[i], odd_nodes[j]) - distance_sums[i] - distance_sums[j];
-                
-                if (cost < min_oppertunity_cost) {
-                    min_oppertunity_cost = cost;
-                    min_i = i;
-                    min_j = j;
+#pragma omp parallel
+        {
+            ssize_t local_cost = SSIZE_MAX;
+            size_t local_i, local_j = 0;
+#pragma omp for
+            for (size_t i = 0; i < count - 1; i++) {
+                for (size_t j = i + 1; j < count; j++) {
+                    // calculate the oppertunity cost of connecting these two nodes
+                    ssize_t cost = 2 * hammingDist(odd_nodes[i], odd_nodes[j]) - distance_sums[i] - distance_sums[j];
+                    
+                    if (cost < local_cost) {
+                        local_cost = cost;
+                        local_i = i;
+                        local_j = j;
+                    }
                 }
             }
+#pragma omp critical
+            if (local_cost < min_oppertunity_cost) {
+                min_oppertunity_cost = local_cost;
+                min_i = local_i;
+                min_j = local_j;
+            }
         }
+
         // update distance_sums to account for the removal
         for (size_t i = 0; i < count; i++)
             distance_sums[i] -= hammingDist(odd_nodes[i], odd_nodes[min_i]) + hammingDist(odd_nodes[i], odd_nodes[min_j]);
@@ -300,7 +314,7 @@ int main()
 {
     //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    uint64_t array[20];
+    uint64_t array[2000];
     for (uint64_t i = 0; i < array_size(array); i += (rand() % 2))
         array[i] = i;
 
@@ -337,7 +351,7 @@ int main()
     uint64_t *euler = getEulerPath(euler_in, total_len);
     total_len = removeDuplicates(euler, total_len / 2);
     for (int i = 0; i < total_len; i++) {
-        printf("%lu, ", euler[i]);
+        printf("%lx, ", euler[i]);
     }
 
 }
