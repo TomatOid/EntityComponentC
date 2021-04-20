@@ -306,6 +306,7 @@ ssize_t removeDuplicates(uint64_t *array, size_t count)
         }
     }
 
+    free(table.items);
 error1:
     free(page.pool);
     free(page.free);
@@ -374,7 +375,7 @@ int main()
 {
     //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    uint64_t array[3000];
+    uint64_t array[200];
     for (uint64_t i = 0; i < array_size(array); i += 1)
         array[i] = i;
 
