@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <limits.h>
+#include <string.h>
 #include <omp.h>
 #include "HashTable.h"
 
@@ -164,12 +165,12 @@ int getMinMatching(uint64_t *odd_nodes, size_t count)
     for (; count >= 2; count -= 2) {
         ssize_t min_oppertunity_cost = SSIZE_MAX;
         size_t min_i, min_j = 0;
+        ssize_t local_cost = SSIZE_MAX;
+        size_t local_i, local_j = 0;
         // loop over all edges
-#pragma omp parallel
+#pragma omp parallel private(local_cost, local_i, local_j)
         {
-            ssize_t local_cost = SSIZE_MAX;
-            size_t local_i, local_j = 0;
-#pragma omp for
+#pragma omp for 
             for (size_t i = 0; i < count - 1; i++) {
                 for (size_t j = i + 1; j < count; j++) {
                     // calculate the oppertunity cost of connecting these two nodes
@@ -271,8 +272,6 @@ uint64_t *getEulerPath(uint64_t *edges, size_t count)
         }
     } while (stack_top > 0);
 
-    printf("solution_top = %lu, count = %lu\n", solution_top, count);
-
     // think i know why people like defer now
     // TODO: maybe do one giant alloc instead of a bunch of little ones,
     // although this will probably increase the chance of failure in a
@@ -316,6 +315,57 @@ error0:
 
 int solveTSP(uint64_t *array, size_t count)
 {
+    int error_code = 0;
+    struct SetNode *set = NULL;
+    struct GraphEdge *min_tree = getMinSpanningForest(array, count, &set);
+    if (!min_tree)
+        goto error0;
+
+    size_t odd_count = 0;
+    uint64_t *odds = getOddDegree(set, count, &odd_count);
+    if (!odds)
+        goto error1;
+
+    if (!getMinMatching(odds, odd_count))
+        goto error2;
+
+    // union the two graphs together
+    size_t total_len = 2 * (count - 1) + odd_count;
+    uint64_t *euler_in = malloc(sizeof(uint64_t) * total_len);
+    if (!euler_in)
+        goto error2;
+    
+    {
+        size_t index = 0;
+        for (; index / 2 < count - 1; index += 2) {
+            euler_in[index] = min_tree[index / 2].verticies[0]->value;
+            euler_in[index + 1] = min_tree[index / 2].verticies[1]->value;
+        }
+        for (size_t i = 0; index < total_len; i++, index++) {
+            euler_in[index] = odds[i];
+        }
+    }
+    
+    uint64_t *euler = getEulerPath(euler_in, total_len);
+    if (!euler)
+        goto error3;
+    total_len = removeDuplicates(euler, total_len / 2);
+    if (total_len == (size_t)-1)
+        goto error4;
+    memcpy(array, euler, count * sizeof(uint64_t));
+
+    error_code = 1;
+error4:
+    free(euler);
+error3:
+    free(euler_in);
+error2:
+    free(odds);
+error1:
+    free(min_tree);
+    free(set);
+error0:
+    return error_code;
 }
 
 #define array_size(arr) (sizeof(arr) / sizeof(*arr))
@@ -324,49 +374,19 @@ int main()
 {
     //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    uint64_t array[1000];
+    uint64_t array[3000];
     for (uint64_t i = 0; i < array_size(array); i += 1)
         array[i] = i;
 
-    struct SetNode *set = NULL;
-    struct GraphEdge *min_tree = getMinSpanningForest(array, array_size(array), &set);
+    solveTSP(array, array_size(array));
 
-    for (int i = 0; i < array_size(array) - 1; i++)
-        printf("<%lu, %lu>\n", min_tree[i].verticies[0]->value, min_tree[i].verticies[1]->value);
-
-    //for (int i = 0; i < array_size(array); i++)
-    //    printf("value: %lu, degree: %d\n", set[i].value, set[i].degree);
-
-    size_t odd_count = 0;
-    uint64_t *odds = getOddDegree(set, sizeof(array) / sizeof(*array), &odd_count);
-    
-    getMinMatching(odds, odd_count);
-
-    for (int i = 0; i + 1 < odd_count; i += 2)
-        printf("[%lu, %lu]\n", odds[i], odds[i + 1]);
-
-    // append the two arrays together
-    // TODO: correct spaget
-    size_t total_len = 2 * (array_size(array) - 1) + odd_count;
-    uint64_t *euler_in = malloc(sizeof(uint64_t) * total_len);
-    int index = 0;
-    for (; index / 2 < array_size(array) - 1; index += 2) {
-        euler_in[index] = min_tree[index / 2].verticies[0]->value;
-        euler_in[index + 1] = min_tree[index / 2].verticies[1]->value;
-    }
-    for (int i = 0; index < total_len; i++, index++) {
-        euler_in[index] = odds[i];
-    }
-    
-    uint64_t *euler = getEulerPath(euler_in, total_len);
-    total_len = removeDuplicates(euler, total_len / 2);
-    for (int i = 0; i < total_len; i++) {
-        printf("%lx, ", euler[i]);
+    for (int i = 0; i < array_size(array); i++) {
+        printf("%lx, ", array[i]);
     }
 
     int ham_sum = 0;
-    for (int i = 0; i < total_len - 1; i++)
-        ham_sum += hammingDist(euler[i], euler[i + 1]);
+    for (int i = 0; i < array_size(array) - 1; i++)
+        ham_sum += hammingDist(array[i], array[i + 1]);
 
     printf("%f\n", (double)ham_sum / ((double)array_size(array) - 1));
 
