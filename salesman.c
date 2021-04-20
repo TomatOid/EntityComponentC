@@ -80,22 +80,23 @@ int edgeCompareFn(const void *a, const void *b)
 
 struct GraphEdge *getMinSpanningForest(uint64_t *numbers, size_t count, struct SetNode **disjoint_set)
 {
+    struct GraphEdge *result = NULL;
     // we want to solve this for the complete graph, so we will have
     // count choose 2 edges, so we allocate an array of size count * (count - 1) / 2
 
     size_t edges_count = count * (count - 1) / 2;
     struct GraphEdge *edges = malloc(sizeof(struct GraphEdge) * edges_count);
     if (!edges)
-        return NULL;
+        goto error0;
 
     // also allocate enough space for the disjoint-set, and avoid memory leak
     // by setting value of disjoint_set
     if (!disjoint_set)
-        return NULL;
+        goto error1;
     *disjoint_set = malloc(sizeof(struct SetNode) * count);
     struct SetNode *dis_set = *disjoint_set;
     if (!dis_set)
-        return NULL;
+        goto error1;
 
     // now initialise the disjoint-set
     for (size_t i = 0; i < count; i++)
@@ -114,9 +115,9 @@ struct GraphEdge *getMinSpanningForest(uint64_t *numbers, size_t count, struct S
     qsort(edges, edges_count, sizeof(struct GraphEdge), edgeCompareFn);
 
     // the minimum spanning tree can have at most count - 1 elements
-    struct GraphEdge *result = malloc(sizeof(struct GraphEdge) * (count - 1));
+    result = malloc(sizeof(struct GraphEdge) * (count - 1));
     if (!result)
-        return NULL;
+        goto error1;
 
     // and now after all that setup, stand by for the algorithm!
     size_t return_count = 0;
@@ -126,7 +127,9 @@ struct GraphEdge *getMinSpanningForest(uint64_t *numbers, size_t count, struct S
         }
     }
 
+error1:
     free(edges);
+error0:
     return result;
 } 
 
@@ -180,10 +183,12 @@ int getMinMatching(uint64_t *odd_nodes, size_t count)
                 }
             }
 #pragma omp critical
-            if (local_cost < min_oppertunity_cost) {
-                min_oppertunity_cost = local_cost;
-                min_i = local_i;
-                min_j = local_j;
+            {
+                if (local_cost < min_oppertunity_cost) {
+                    min_oppertunity_cost = local_cost;
+                    min_i = local_i;
+                    min_j = local_j;
+                }
             }
         }
 
@@ -297,15 +302,20 @@ ssize_t removeDuplicates(uint64_t *array, size_t count)
     for (size_t i = new_len = 0; i < count; i++) {
         if (!findInTable(&table, array[i], &dummy)) {
             array[new_len++] = array[i];
-            insertToTable(&table, array[i], 0); 
+            // this should not fail since i am using it correctly
+            insertToTable(&table, array[i], 0);
         }
     }
-    
+
 error1:
     free(page.pool);
     free(page.free);
 error0:
     return new_len;
+}
+
+int solveTSP(uint64_t *array, size_t count)
+{
 }
 
 #define array_size(arr) (sizeof(arr) / sizeof(*arr))
@@ -314,8 +324,8 @@ int main()
 {
     //uint64_t array[] = { 1, 2, 3, 5, 6, 7, 12, 13, 16, 17, 19, 22, 31 };
     //uint64_t array[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-    uint64_t array[2000];
-    for (uint64_t i = 0; i < array_size(array); i += (rand() % 2))
+    uint64_t array[1000];
+    for (uint64_t i = 0; i < array_size(array); i += 1)
         array[i] = i;
 
     struct SetNode *set = NULL;
@@ -353,5 +363,11 @@ int main()
     for (int i = 0; i < total_len; i++) {
         printf("%lx, ", euler[i]);
     }
+
+    int ham_sum = 0;
+    for (int i = 0; i < total_len - 1; i++)
+        ham_sum += hammingDist(euler[i], euler[i + 1]);
+
+    printf("%f\n", (double)ham_sum / ((double)array_size(array) - 1));
 
 }
